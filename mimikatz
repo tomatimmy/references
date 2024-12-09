@@ -1,0 +1,69 @@
+# List or export certificates
+CRYPTO::Certificates
+
+# Create golden, silver, or trust Kerberos tickets
+KERBEROS::Golden
+
+# List all user tickets (TGT and TGS) in user memory. No special privileges required.
+# Similar functionality to "klist".
+KERBEROS::List
+
+# Pass the ticket. Typically used to inject a stolen or forged Kerberos ticket (golden/silver/trust).
+KERBEROS::PTT
+
+# Ask a Domain Controller (DC) to synchronize an object to get password data for an account.
+# No need to run code on the DC.
+LSADUMP::DCSync
+
+# Ask the LSA Server to retrieve SAM/AD enterprise data. Can be used to dump all Active Directory domain credentials from a Domain Controller or lsass.dmp dump file.
+# Retrieve specific account credentials, such as krbtgt, with the parameter `/name`.
+LSADUMP::LSA
+
+# Retrieve the SysKey to decrypt SAM entries (from registry or hive). 
+# Dumps credentials for local accounts from the local Security Account Manager (SAM) database.
+LSADUMP::SAM
+
+# Retrieve Trust Auth Information via LSA Server. Dumps trust keys (passwords) for all associated trusts (domain/forest).
+LSADUMP::Trust
+
+# Add to SIDHistory of a user account. 
+# The first value is the target account, and the second is the account/group name(s) (or SID).
+# (Note: Moved to SID:modify as of May 6, 2016.)
+MISC::AddSid
+
+# Inject a malicious Windows SSP to log locally authenticated credentials.
+MISC::MemSSP
+
+# Inject a Skeleton Key into LSASS on a Domain Controller. 
+# Enables all user authentication on the patched DC using a "master password" (Skeleton Key) as well as their usual password.
+MISC::Skeleton
+
+# Get debug rights. Required for many Mimikatz commands.
+PRIVILEGE::Debug
+
+# List Kerberos encryption keys.
+SEKURLSA::Ekeys
+
+# List Kerberos credentials for all authenticated users, including services and computer accounts.
+SEKURLSA::Kerberos
+
+# Retrieve the Domain Kerberos service account (KRBTGT) password data.
+SEKURLSA::Krbtgt
+
+# List all available provider credentials. Shows recently logged-on user and computer credentials.
+SEKURLSA::LogonPasswords
+
+# Perform Pass-the-Hash and Over-Pass-the-Hash attacks.
+SEKURLSA::Pth
+
+# List all available Kerberos tickets for all authenticated users. Accesses tickets of other sessions and is not subject to key export restrictions.
+SEKURLSA::Tickets
+
+# List all tokens on the system.
+TOKEN::List
+
+# Impersonate a token. Used to elevate permissions to SYSTEM (default) or find a domain admin token on the box.
+TOKEN::Elevate
+
+# Impersonate a token with Domain Admin credentials.
+TOKEN::Elevate /domainadmin

